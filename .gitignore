@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 环境变量与密钥（绝不能提交）
+.env
+
+# 模型与向量库（体积大，不入库）
+*.pt
+*.pth
+*.faiss
+*.index
+chroma_db/
+vectorstore/
+
+# 运行产物
+runs/
+static/result/
+*.log
+
+# IDE / 系统
+.idea/
+.vscode/
+.DS_Store
+
+# Docker
+*.tar
