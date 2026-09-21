@@ -1,10 +1,25 @@
 """ReAct Agent：优先通过 MCP 协议加载工具，失败时降级为本地工具。"""
 import asyncio
+import sys
+import threading
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.tools import tool
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langgraph.prebuilt import create_react_agent
+
+
+def _run_sync(coro):
+    """在独立线程里跑协程，兼容已在事件循环中的调用场景（如 lifespan）。"""
+    result = {}
+
+    def worker():
+        result["value"] = asyncio.run(coro)
+
+    t = threading.Thread(target=worker)
+    t.start()
+    t.join()
+    return result.get("value")
 
 
 def _local_tools():
@@ -36,12 +51,12 @@ def load_tools() -> list:
     try:
         client = MultiServerMCPClient({
             "demo": {
-                "command": "python",
+                "command": sys.executable,
                 "args": ["-m", "app.mcp_server"],
                 "transport": "stdio",
             }
         })
-        tools = asyncio.get_event_loop().run_until_complete(client.get_tools())
+        tools = _run_sync(client.get_tools())
         print(f"[agent] 已通过 MCP 协议加载 {len(tools)} 个工具")
         return tools
     except Exception as e:

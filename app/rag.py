@@ -1,4 +1,7 @@
-"""Corrective RAG：检索 -> 相关性校验 -> 不相关则拒答，相关则带引用生成。"""
+"""Corrective RAG：检索 -> 相关性校验 -> 不相关则拒答，相关则带引用生成。
+
+文档来源：MySQL（documents 表），数据库不可用时降级为内置示例文档。
+"""
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
@@ -6,6 +9,8 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 
 from app.config import settings
+from app.circuit_breaker import circuit
+from app.db import fetch_documents
 
 _llm = ChatOpenAI(base_url=settings.llm_base_url,
                   api_key=settings.llm_api_key,
@@ -21,34 +26,45 @@ QA_PROMPT = ChatPromptTemplate.from_template(
     "你是企业知识库助手，只能根据给定资料回答问题，"
     "不要编造。资料：\n{context}\n\n问题：{question}")
 
+FALLBACK_DOCS = [
+    "员工年假规则：入职满一年可享5天带薪年假，此后每满一年增加1天，上限15天。",
+    "报销流程：在OA系统提交报销单，附上发票照片，部门主管审批后3个工作日内到账。",
+    "服务器部署规范：所有服务必须容器化部署，禁止在宿主机直接运行业务进程。",
+    "请假制度：病假需提供医院证明，事假提前3天在OA申请。",
+]
 
-def _load_sample_docs() -> list[Document]:
-    return [
-        Document(page_content="员工年假规则：入职满一年可享5天带薪年假，"
-                              "此后每满一年增加1天，上限15天。"),
-        Document(page_content="报销流程：在OA系统提交报销单，"
-                              "附上发票照片，部门主管审批后3个工作日内到账。"),
-        Document(page_content="服务器部署规范：所有服务必须容器化部署，"
-                              "禁止在宿主机直接运行业务进程。"),
-        Document(page_content="请假制度：病假需提供医院证明，"
-                              "事假提前3天在OA申请。"),
-    ]
+
+def load_documents() -> list[Document]:
+    """优先从 MySQL 加载，失败降级为内置文档。"""
+    contents = fetch_documents()
+    if not contents:
+        print("[rag] MySQL 无数据，使用内置示例文档")
+        contents = FALLBACK_DOCS
+    return [Document(page_content=c) for c in contents]
 
 
 def build_vectorstore():
-    return FAISS.from_documents(_load_sample_docs(), _embeddings)
+    return FAISS.from_documents(load_documents(), _embeddings)
 
 
 vectorstore = build_vectorstore()
 retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
 
 
+@circuit("llm-grade",
+         failure_threshold=settings.cb_failure_threshold,
+         recovery_timeout=settings.cb_recovery_timeout,
+         fallback=lambda question, doc: False)
 def _is_relevant(question: str, doc: str) -> bool:
     resp = (_llm | (lambda x: x.content.strip().lower())).invoke(
         GRADE_PROMPT.format(question=question, doc=doc))
     return resp.startswith("yes")
 
 
+@circuit("llm-qa",
+         failure_threshold=settings.cb_failure_threshold,
+         recovery_timeout=settings.cb_recovery_timeout,
+         fallback=lambda question: None)
 def answer_from_kb(question: str) -> str | None:
     """Corrective RAG：检索并校验相关性，返回 None 表示知识库无法回答。"""
     docs = retriever.invoke(question)

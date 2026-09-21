@@ -6,9 +6,13 @@ from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 
 from app.agent import build_agent
+from app.circuit_breaker import circuit
 from app.config import settings
+from app.db import init_db
 from app.rag import answer_from_kb
 from app.utils import get_cached, set_cached
+from fastapi.staticfiles import StaticFiles
+
 
 
 class ChatRequest(BaseModel):
@@ -17,11 +21,23 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     answer: str
-    source: str  # kb = 知识库 / agent = 工具调用 / cache = 缓存
+    source: str  # kb = 知识库 / agent = 工具调用 / cache = 缓存 / degraded = 降级
+
+
+@circuit("agent",
+         failure_threshold=settings.cb_failure_threshold,
+         recovery_timeout=settings.cb_recovery_timeout,
+         fallback=lambda agent, question: {
+             "messages": [{"content": "抱歉，工具服务暂时不可用，请稍后再试。"}]
+         })
+def run_agent(agent, question: str) -> dict:
+    """带熔断器的 Agent 调用，失败时返回降级提示。"""
+    return agent.invoke({"messages": [("user", question)]})
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    init_db()  # MySQL 建库建表 + 空库灌示例数据
     app.state.llm = ChatOpenAI(base_url=settings.llm_base_url,
                                api_key=settings.llm_api_key,
                                model=settings.llm_model)
@@ -50,14 +66,15 @@ def chat(req: ChatRequest):
         set_cached(req.question, kb_answer, "kb")
         return ChatResponse(answer=kb_answer, source="kb")
 
-    # 3. 交给 ReAct Agent 调用工具
-    result = app.state.agent.invoke(
-        {"messages": [("user", req.question)]})
+    # 3. 交给 ReAct Agent 调用工具（带熔断）
+    result = run_agent(app.state.agent, req.question)
     final = result["messages"][-1].content
+    if final == "抱歉，工具服务暂时不可用，请稍后再试。":
+        return ChatResponse(answer=final, source="degraded")
     set_cached(req.question, final, "agent")
     return ChatResponse(answer=final, source="agent")
 
-
+app.mount("/", StaticFiles(directory="static", html=True), name="static")
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

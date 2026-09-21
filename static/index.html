@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>天气ai助手</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-plus/dist/index.css">
+<script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/element-plus/dist/index.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@element-plus/icons-vue/dist/index.iife.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+    background-attachment: fixed;
+    font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .layout {
+    max-width: 900px;
+    margin: 0 auto;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+  }
+  header {
+    text-align: center;
+    padding: 10px 0 20px;
+  }
+  .dino-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 8px;
+  }
+  .dino-img {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: #fff;
+    object-fit: cover;
+    box-shadow: 0 4px 16px rgba(0,0,0,.2);
+    animation: bounce 2.5s ease-in-out infinite;
+  }
+  @keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+  }
+  header h2 {
+    margin: 0;
+    color: #fff;
+    font-size: 26px;
+    text-shadow: 0 2px 8px rgba(0,0,0,.2);
+  }
+  header p {
+    margin: 6px 0 0;
+    color: rgba(255,255,255,.85);
+    font-size: 13px;
+  }
+  .chat-box {
+    flex: 1;
+    overflow-y: auto;
+    background: rgba(255,255,255,.95);
+    backdrop-filter: blur(10px);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 8px 32px rgba(0,0,0,.12);
+    min-height: 300px;
+  }
+  .msg { display: flex; margin-bottom: 18px; }
+  .msg.user { justify-content: flex-end; }
+  .bubble {
+    max-width: 72%;
+    padding: 12px 16px;
+    border-radius: 14px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 15px;
+    position: relative;
+  }
+  .msg.ai .bubble {
+    background: #f4f4f5;
+    color: #303133;
+    border-bottom-left-radius: 4px;
+  }
+  .msg.user .bubble {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: #fff;
+    border-bottom-right-radius: 4px;
+    box-shadow: 0 2px 8px rgba(102,126,234,.4);
+  }
+  .tag { margin-left: 8px; vertical-align: middle; }
+  .input-bar {
+    display: flex;
+    gap: 12px;
+    padding: 16px 0 4px;
+    align-items: flex-end;
+  }
+  .input-bar .el-textarea { flex: 1; }
+  .input-bar .el-textarea__inner {
+    min-height: 64px !important;
+    font-size: 15px;
+    border-radius: 12px;
+    padding: 12px 14px;
+    resize: none;
+  }
+  .send-btn {
+    height: 64px;
+    padding: 0 24px;
+    border-radius: 12px;
+    font-size: 15px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border: none;
+  }
+  .loading { display: flex; align-items: center; gap: 6px; color: #909399; }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%; background: #667eea;
+    animation: blink 1.2s infinite;
+  }
+  .dot:nth-child(2) { animation-delay: .2s; }
+  .dot:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%, 80%, 100% { opacity: .2; } 40% { opacity: 1; } }
+  .quick-tags {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .quick-tag {
+    background: rgba(255,255,255,.2);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,.3);
+    border-radius: 16px;
+    padding: 4px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .quick-tag:hover {
+    background: rgba(255,255,255,.35);
+    transform: translateY(-1px);
+  }
+
+  /* ===== 移动端响应式适配 ===== */
+  @media (max-width: 600px) {
+    .layout {
+      max-width: 100%;
+      padding: 10px 12px;
+      min-height: 100dvh;
+    }
+    header { padding: 6px 0 12px; }
+    .dino-banner { gap: 10px; }
+    .dino-img {
+      width: 52px;
+      height: 52px;
+      box-shadow: 0 2px 10px rgba(0,0,0,.15);
+    }
+    header h2 { font-size: 20px; }
+    header p { font-size: 11px; margin-top: 4px; }
+    .chat-box {
+      padding: 14px;
+      border-radius: 12px;
+      min-height: 0;
+      box-shadow: 0 4px 20px rgba(0,0,0,.1);
+    }
+    .msg { margin-bottom: 12px; }
+    .bubble {
+      max-width: 85%;
+      padding: 9px 12px;
+      font-size: 14px;
+      line-height: 1.6;
+      border-radius: 12px;
+    }
+    .tag { margin-left: 6px; font-size: 11px; }
+    .quick-tags { gap: 6px; margin-bottom: 8px; }
+    .quick-tag {
+      padding: 3px 10px;
+      font-size: 11px;
+    }
+    .input-bar {
+      gap: 8px;
+      padding: 10px 0 2px;
+    }
+    .input-bar .el-textarea__inner {
+      min-height: 48px !important;
+      font-size: 14px;
+      padding: 10px 12px;
+      border-radius: 10px;
+    }
+    .send-btn {
+      height: 48px;
+      padding: 0 16px;
+      font-size: 14px;
+      border-radius: 10px;
+    }
+  }
+
+  /* 平板适配 */
+  @media (min-width: 601px) and (max-width: 900px) {
+    .layout { max-width: 100%; padding: 16px; }
+    .bubble { max-width: 78%; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="layout">
+    <header>
+      <div class="dino-banner">
+        <img class="dino-img" src="1.jpg" alt="头像">
+        <h2>可爱的AI天气助手</h2>
+      </div>
+      <p>掌控风雨，我为雷公。苍天已死，黄巾当立。</p>
+    </header>
+
+    <div class="chat-box" ref="chatBox">
+      <div v-for="(m, i) in messages" :key="i" :class="['msg', m.role]">
+        <div class="bubble">
+          {{ m.content }}
+          <el-tag v-if="m.source && m.source !== 'user'" size="small"
+                  :type="tagType(m.source)" class="tag">{{ sourceText(m.source) }}</el-tag>
+        </div>
+      </div>
+      <div v-if="loading" class="msg ai">
+        <div class="bubble loading"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+      </div>
+    </div>
+
+    <div class="quick-tags">
+      <span class="quick-tag" @click="quickAsk('年假有几天？')">年假有几天？</span>
+      <span class="quick-tag" @click="quickAsk('北京天气怎么样')">北京天气</span>
+      <span class="quick-tag" @click="quickAsk('算一下 12*8')">算 12*8</span>
+      <span class="quick-tag" @click="quickAsk('现在几点了')">现在几点</span>
+    </div>
+
+    <div class="input-bar">
+      <el-input
+        v-model="input"
+        type="textarea"
+        :rows="2"
+        placeholder="试试：年假有几天？ / 北京天气怎么样 / 算一下 12*8"
+        @keydown="onKeydown"
+        :disabled="loading"
+        resize="none"></el-input>
+      <el-button class="send-btn" type="primary" :loading="loading" @click="send">
+        发送
+      </el-button>
+    </div>
+  </div>
+</div>
+
+<script>
+const { createApp, ref, nextTick } = Vue;
+const App = {
+  setup() {
+    const messages = ref([{ role: 'ai', content: '你好，我是企业知识库助手，可以问答规章制度，也能调用工具查天气、算数、看时间。遇到服务波动时我会自动熔断降级哦~' }]);
+    const input = ref('');
+    const loading = ref(false);
+    const chatBox = ref(null);
+
+    const tagType = s => ({ kb: 'success', agent: 'warning', cache: 'info', degraded: 'danger' }[s] || 'info');
+    const sourceText = s => ({ kb: '知识库', agent: 'Agent工具', cache: '缓存', degraded: '熔断降级' }[s] || s);
+
+    function onKeydown(e) {
+      // 回车发送，Shift+Enter 换行（兼容手机端回车直接发送）
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        send();
+      }
+    }
+
+    function quickAsk(q) {
+      input.value = q;
+      send();
+    }
+
+    async function send() {
+      const q = input.value.trim();
+      if (!q || loading.value) return;
+      messages.value.push({ role: 'user', content: q, source: 'user' });
+      input.value = '';
+      loading.value = true;
+      scroll();
+      try {
+        const res = await fetch('/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question: q })
+        });
+        const data = await res.json();
+        messages.value.push({ role: 'ai', content: data.answer, source: data.source });
+      } catch (e) {
+        messages.value.push({ role: 'ai', content: '请求失败：' + e.message });
+      } finally {
+        loading.value = false;
+        scroll();
+      }
+    }
+
+    async function scroll() {
+      await nextTick();
+      chatBox.value.scrollTop = chatBox.value.scrollHeight;
+    }
+
+    return { messages, input, loading, chatBox, send, quickAsk, onKeydown, tagType, sourceText };
+  }
+};
+const app = createApp(App);
+app.use(ElementPlus);
+for (const [name, comp] of Object.entries(ElementPlusIconsVue)) app.component(name, comp);
+app.mount('#app');
+</script>
+</body>
+</html>

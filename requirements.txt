@@ -11,3 +11,4 @@ mcp
 faiss-cpu
 sentence-transformers
 redis
+pyodbc
