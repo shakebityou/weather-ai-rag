@@ -166,7 +166,7 @@ curl -X POST http://localhost:8000/chat \
 
 同一个问题问两次，第二次 `source` 变为 `cache`，说明 Redis 缓存命中。
 
-## 面试可讲的工程细节
+## 工程细节
 
 1. **Corrective RAG**：检索结果经 LLM 相关性校验，不相关拒答转 Agent，防幻觉
 2. **优雅降级**：SQL Server / Redis / MCP 任一不可用，服务照常运行（内置文档、不缓存、本地工具）
