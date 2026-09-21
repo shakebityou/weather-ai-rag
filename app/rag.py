@@ -8,6 +8,8 @@ from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 
+import json
+
 from app.config import settings
 from app.circuit_breaker import circuit
 from app.db import fetch_documents
@@ -23,8 +25,12 @@ GRADE_PROMPT = ChatPromptTemplate.from_template(
     "判断下面的文档是否与问题相关，只回答 yes 或 no。\n\n问题：{question}\n文档：{doc}")
 
 QA_PROMPT = ChatPromptTemplate.from_template(
-    "你是企业知识库助手，只能根据给定资料回答问题，"
-    "不要编造。资料：\n{context}\n\n问题：{question}")
+    "你是一个weather天气ai助手，你叫小A。\n"
+    "只能根据给定资料回答问题，不要编造资料外的内容。\n"
+    "回答要简短直接，只给关键信息。\n"
+    "如果资料中没有答案，如实告知用户暂时没有相关信息，并安抚用户情绪。\n"
+    "始终返回 JSON 格式：{{\"answer\": \"你的回答\"}}\n\n"
+    "资料：\n{context}\n\n问题：{question}")
 
 FALLBACK_DOCS = [
     "员工年假规则：入职满一年可享5天带薪年假，此后每满一年增加1天，上限15天。",
@@ -61,6 +67,21 @@ def _is_relevant(question: str, doc: str) -> bool:
     return resp.startswith("yes")
 
 
+def _parse_answer(content: str) -> str:
+    """从 LLM 返回内容中提取 answer 字段，解析失败返回原文。"""
+    try:
+        # 尝试提取 JSON 部分
+        start = content.find("{")
+        end = content.rfind("}")
+        if start != -1 and end != -1:
+            obj = json.loads(content[start:end + 1])
+            if isinstance(obj, dict) and "answer" in obj:
+                return str(obj["answer"])
+    except (json.JSONDecodeError, ValueError):
+        pass
+    return content
+
+
 @circuit("llm-qa",
          failure_threshold=settings.cb_failure_threshold,
          recovery_timeout=settings.cb_recovery_timeout,
@@ -72,5 +93,6 @@ def answer_from_kb(question: str) -> str | None:
     if not relevant:
         return None
     context = "\n\n".join(d.page_content for d in relevant)
-    return (_llm | (lambda x: x.content)).invoke(
+    raw = (_llm | (lambda x: x.content)).invoke(
         QA_PROMPT.format(context=context, question=question))
+    return _parse_answer(raw)

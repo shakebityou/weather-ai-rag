@@ -48,21 +48,21 @@ def _local_tools():
 
 
 def load_tools() -> list:
-    try:
-        client = MultiServerMCPClient({
-            "demo": {
-                "command": sys.executable,
-                "args": ["-m", "app.mcp_server"],
-                "transport": "stdio",
-            }
-        })
-        tools = _run_sync(client.get_tools())
-        print(f"[agent] 已通过 MCP 协议加载 {len(tools)} 个工具")
-        return tools
-    except Exception as e:
-        print(f"[agent] MCP 加载失败，降级为本地工具：{e}")
-        return _local_tools()
+    """加载工具。使用本地同步工具（MCP 工具为 async-only，不支持同步调用）。"""
+    print("[agent] 使用本地同步工具（天气/计算/时间）")
+    return _local_tools()
+
+
+SYSTEM_PROMPT = """你是一个weather天气ai助手，你叫小A。
+
+【核心规则】
+1. 身份：你是天气AI助手小A，可以查询天气、做数学计算、查询时间等。
+2. 不编造：如果工具查询结果为空或知识库没有相关信息，必须如实告知用户"暂时没有相关信息"，并安抚用户情绪（例如"别担心，您可以稍后再试或联系官方客服获取帮助"）。
+3. 简洁：回答要简短直接，只给关键信息，不输出无关内容。
+4. 数学计算：遇到任何算数/计算问题，**必须先调用 calculator 工具**再回答，绝对不能自己心算或直接给出计算结果。如果 calculator 工具不可用，回复"抱歉，计算功能暂时不可用，请联系官方客服"。
+5. 输出格式：始终返回 JSON 格式，结构为 {"answer": "你的回答内容"}，不要输出任何 JSON 以外的文字。
+6. 异常回避：如果无法正常回答（工具失败、信息缺失），在 answer 中返回安抚话术并引导用户联系官方客服，不要暴露错误细节。"""
 
 
 def build_agent(llm: BaseChatModel):
-    return create_react_agent(llm, load_tools())
+    return create_react_agent(llm, load_tools(), prompt=SYSTEM_PROMPT)
