@@ -1,4 +1,4 @@
-# Agentic RAG Demo（实习面试项目）
+# Agentic RAG Demo
 
 带 MCP 工具的 Agentic RAG 问答系统：**SQL Server 持久化知识库，Redis 加速，知识库优先、答不上调工具，一键启动自带公网穿透**。
 
