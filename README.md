@@ -175,16 +175,7 @@ curl -X POST http://localhost:8000/chat \
 5. **熔断器保护**：三态模型（CLOSED/OPEN/HALF_OPEN）保护 LLM 与 Agent 调用，连续失败自动熔断并降级，超时后半开探测恢复，避免下游故障雪崩
 6. **一键公网部署**：内置 cloudflared，启动即获得公网地址，手机端无需配置即可访问
 
-## Git 版本管理
 
-```bash
-git init
-git add . && git commit -m "init: agentic rag demo"
-git checkout -b feature/xxx   # 分支开发
-```
-
-注意：`.env` 已被 `.gitignore` 排除；若误提交密钥，先换密钥，再
-`git rm --cached .env` 后重新提交。
 
 ## 常见问题
 
